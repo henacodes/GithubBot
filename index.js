@@ -104,10 +104,19 @@ bot.on("callback_query", (ctx) => {
         try {
           const fileBuffer = Buffer.from(fetchedRepo);
           ctx.telegram
-            .sendDocument(ctx.chat.id, {
-              source: fileBuffer,
-              filename: `${owner}-${repo}.zip`,
-            })
+            .sendDocument(
+              ctx.chat.id,
+              {
+                source: fileBuffer,
+                filename: `${owner}-${repo}.zip`,
+              },
+              {
+                thumb: {
+                  source: "./winrar.jpg",
+                },
+                caption: "File Arrived",
+              }
+            )
             .then((res) => res)
             .catch((err) => ctx.reply("can't send the repo. try again..."));
         } catch (error) {
