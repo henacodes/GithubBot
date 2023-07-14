@@ -1,4 +1,5 @@
 const { Telegraf } = require("telegraf");
+const axioss = require("axios");
 require("dotenv/config");
 const { Octokit, App } = require("octokit");
 const axios = require("axios");
@@ -7,7 +8,7 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 
-const { fetchRepo } = require("./utills");
+const { fetchRepo, showUser, sendRepos } = require("./utills");
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
@@ -15,6 +16,9 @@ const url = "https://github.com";
 
 const app = express();
 
+const octokit = new Octokit({
+  auth: process.env.AUTH,
+});
 var owner = "";
 var repo = "";
 
@@ -27,6 +31,95 @@ bot.help((ctx) =>
     "Please Send me a Github Repo URL like(https://github.com/owner/repo) to Start or use @githubrepo_download_bot to search for repositories"
   )
 );
+
+bot.command("/user", (ctx) => {
+  ctx.reply("searching for user");
+  let username = ctx.message.text.split(" ")[1];
+  (async () => {
+    try {
+      const response = await octokit.rest.users.getByUsername({ username });
+      const { name, avatar_url, bio, followers, following } = response.data;
+      showUser(ctx, name, username, bio, avatar_url, followers, following);
+    } catch (error) {
+      ctx.reply(`A user with @${username} could not be found`);
+    }
+  })();
+});
+
+bot.on("callback_query", (ctx) => {
+  ctx.deleteMessage();
+  const query = ctx.callbackQuery;
+  const data = query.data;
+  if (data.split(" ")[0] === "repos") {
+    const username = data.split(" ")[1];
+    try {
+      axioss
+        .get(`https://api.github.com/users/${username}/repos`)
+        .then((res) => {
+          const repos = res.data.slice(-10);
+          sendRepos(ctx, repos, username);
+        });
+    } catch (error) {
+      console.log(error.message);
+    }
+  }
+  if (data.split(" ")[0] === "repo") {
+    const username = data.split(" ")[1];
+    const repo = data.split(" ")[2];
+    try {
+      axioss
+        .get(`https://api.github.com/repos/${username}/${repo}`)
+        .then((res) => {
+          ctx.telegram.sendMessage(
+            ctx.chat.id,
+            `<b>${repo}</b>\n<i>'${res.data.description} '</i>\n👤 owner : github.com/${username}\n⭐️ stars : ${res.data.stargazers_count}\n👀 watchers :  ${res.data.watchers_count}\n📁 size :  ${res.data.size} KB `,
+            {
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: "Download Zip",
+                      callback_data: `download ${res.data.html_url}`,
+                    },
+                  ],
+                ],
+              },
+            }
+          );
+        });
+    } catch (error) {}
+  }
+
+  if (data.split(" ")[0] === "download") {
+    const url = data.split(" ")[1];
+    const URLcheck = new URL(url);
+    const paths = URLcheck.pathname.toString().split("/");
+    owner = paths[1];
+    repo = paths[2];
+
+    (async () => {
+      try {
+        const fetchedRepo = await fetchRepo(owner, repo, octokit);
+        try {
+          const fileBuffer = Buffer.from(fetchedRepo);
+          ctx.telegram
+            .sendDocument(ctx.chat.id, {
+              source: fileBuffer,
+              filename: `${owner}-${repo}.zip`,
+            })
+            .then((res) => res)
+            .catch((err) => ctx.reply("can't send the repo. try again..."));
+        } catch (error) {
+          ctx.reply(error.message);
+        }
+      } catch (error) {
+        console.log("can't fetch");
+        ctx.reply(error.message);
+      }
+    })();
+  }
+});
 
 bot.on("text", (ctx) => {
   const input = ctx.message.text;
@@ -46,10 +139,6 @@ bot.on("text", (ctx) => {
         ctx.reply("hmm..Seems like You sent a non-github URL 🤔");
       } else {
         try {
-          const octokit = new Octokit({
-            auth: process.env.AUTH,
-          });
-
           ctx.reply("Fetching Files ⏱️");
           (async () => {
             try {
@@ -57,12 +146,19 @@ bot.on("text", (ctx) => {
               try {
                 const fileBuffer = Buffer.from(fetchedRepo);
                 ctx.telegram
-                  .sendDocument(ctx.chat.id, {
-                    source: fileBuffer,
-                    filename: `${owner}-${repo}.zip`,
-                    thumb:
-                      "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Google_2015_logo.svg/800px-Google_2015_logo.svg.png",
-                  })
+                  .sendDocument(
+                    ctx.chat.id,
+                    {
+                      source: fileBuffer,
+                      filename: `${owner}-${repo}.zip`,
+                    },
+                    {
+                      thumb: {
+                        source: "./winrar.jpg",
+                      },
+                      caption: "File Arrived",
+                    }
+                  )
                   .then((res) => res)
                   .catch((err) =>
                     ctx.reply("can't send the repo. try again...")
