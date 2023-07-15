@@ -28,7 +28,7 @@ bot.start((ctx) =>
 
 bot.help((ctx) =>
   ctx.reply(
-    "Please Send me a Github Repo URL like(https://github.com/owner/repo) to Start or use @githubrepo_download_bot to search for repositories"
+    `Find users and their repos here. You can also download repository.\nSend me the link 🔗🔗 to the repository, I will deliver the zip for you.\nAvailable commands\n/start - initialize the bot \n/user <username> - find a user with his github handle {username}.\nDISCLAIMER: Don't insert @username\n/help - this message`
   )
 );
 
@@ -107,7 +107,7 @@ bot.on("callback_query", (ctx) => {
             .sendDocument(
               ctx.chat.id,
               {
-                source: fileBuffer,
+                source: file.Buffer,
                 filename: `${owner}-${repo}.zip`,
               },
               {
