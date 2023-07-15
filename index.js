@@ -34,7 +34,12 @@ bot.help((ctx) =>
 
 bot.command("/user", (ctx) => {
   ctx.reply("searching for user");
-  let username = ctx.message.text.split(" ")[1];
+  let args = ctx.message.text.split(" ");
+  if (args.length < 2) {
+    ctx.reply("Please provide a username");
+    return;
+  }
+  let username = args[1];
   (async () => {
     try {
       const response = await octokit.rest.users.getByUsername({ username });
